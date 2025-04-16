@@ -26,22 +26,10 @@ public class McpController {
 
     @GetMapping("/connect")
     public SseEmitter connect() throws IOException {
-        final SseEmitter sse = new SseEmitter(TimeUnit.MINUTES.toMillis(2));
+        final SseEmitter sse = new SseEmitter(TimeUnit.DAYS.toMillis(60));
         String uuid = UUID.randomUUID().toString().replaceAll("-","");
         SESSIONS.put(uuid, sse);
         sse.send(SseEmitter.event().name("endpoint").data("/mcp/message?sessionId="+uuid));
-        new Thread(() -> {
-            while (true) {
-                try {
-                    Thread.sleep(10000);
-                    sse.send(SseEmitter.event().name("heartbeat").data(System.currentTimeMillis()));
-                } catch (Exception e) {
-                    sse.complete();
-                    SESSIONS.remove(uuid);
-                    return;
-                }
-            }
-        }).start();
         return sse;
     }
 
@@ -53,6 +41,10 @@ public class McpController {
         }
         new Thread(()->{
             try {
+                if (StringUtils.isBlank(body.getId()) || StringUtils.isBlank(body.getMethod())) {
+                    // jsonrpc notification/response
+                    return;
+                }
                 String res = "";
                 if (body.getMethod().equalsIgnoreCase("initialize")) {
                     String ver = (String) body.getParams().get("protocolVersion");
