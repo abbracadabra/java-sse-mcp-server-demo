@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -32,22 +33,10 @@ public class McpControllerMultiDeploy {
 
     @RequestMapping(value = "connect", method = RequestMethod.GET)
     public SseEmitter connect() throws IOException {
-        final SseEmitter sse = new SseEmitter(TimeUnit.MINUTES.toMillis(2));
+        final SseEmitter sse = new SseEmitter(TimeUnit.DAYS.toMillis(60));
         String uuid = UUID.randomUUID().toString().replaceAll("-","");
         SESSIONS.put(uuid, sse);
         sse.send(SseEmitter.event().name("endpoint").data(StrUtil.format("/mcp/message?sessionId={}&ip={}",uuid, IpUtil.getIp())));
-        new Thread(() -> {
-            while (true) {
-                try {
-                    Thread.sleep(10000);
-                    sse.send(SseEmitter.event().name("heartbeat").data(System.currentTimeMillis()));
-                } catch (Exception e) {
-                    sse.complete();
-                    SESSIONS.remove(uuid);
-                    return;
-                }
-            }
-        }).start();
         return sse;
     }
 
@@ -67,6 +56,10 @@ public class McpControllerMultiDeploy {
         }
         new Thread(()->{
             try {
+                if (StringUtils.isBlank(body.getId()) || StringUtils.isBlank(body.getMethod())) {
+                    // jsonrpc notification/response
+                    return;
+                }
                 String res = "";
                 if (body.getMethod().equalsIgnoreCase("initialize")) {
                     String ver = (String) body.getParams().get("protocolVersion");
