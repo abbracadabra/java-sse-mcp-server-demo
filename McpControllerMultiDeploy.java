@@ -38,25 +38,34 @@ public class McpControllerMultiDeploy {
 
     @RequestMapping(value = "/gw/endpoint", method = {RequestMethod.POST, RequestMethod.GET})
     public Object endpoint(@RequestBody(required = false) String bodyStr,
-            @RequestHeader(value="mcp-session-id",required = false) String sid,
-            @RequestHeader(value="email",required = false) String email, HttpServletRequest request, HttpServletResponse response) throws IOException {
+            @RequestHeader(value="mcp-session-id",required = false) String sid, // 2025-03-26
+            @RequestHeader(value="Authorization",required = false) String authHeader, // 2025-03-26，bearer authentication header
+            HttpServletRequest request, HttpServletResponse response) throws IOException {
 
+        // 兼容2024-11-05，老客户端建立sse连接，老客户端是没有mcp-session-id头的。2025-03-26的Get连接是在initialize之后发起的肯定有mcp-session-id，如果Get没有mcp-session-id则是老协议
         boolean isGet = "GET".equalsIgnoreCase(request.getMethod());
+        if (isGet && StringUtils.isBlank(sid)) {
+            return connect();
+        }
+
+        if (StringUtils.isBlank(authHeader)) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized: auth header missing"); // 无Authorization头，返回401, 2025-03-26
+            return null;
+        }
+
         if (isGet) {
-            if (StringUtils.isBlank(sid)) {
-                // 兼容2024-11-05
-                return connect();
-            }
-            return new SseEmitter(TimeUnit.DAYS.toMillis(60));
+            return new SseEmitter(TimeUnit.DAYS.toMillis(60)); // 2025-03-26
         }
 
         JSONRpcReqMessage body = JSONObject.parseObject(bodyStr, JSONRpcReqMessage.class);
         if (StringUtils.isBlank(body.getId()) || StringUtils.isBlank(body.getMethod())) {
             // jsonrpc notification/response
-            return null;
+            return ResponseEntity.status(HttpStatus.ACCEPTED).build(); // status:202  2025-03-26
         }
+        
         if (body.getMethod().equalsIgnoreCase("initialize")) {
-            String ver = (String) body.getParams().get("protocolVersion");
+            response.setHeader("mcp-session-id", UUID.randomUUID().toString().replaceAll("-", ""));
+            String ver = (String) body.getParams().get("protocolVersion"); // 客户端mcp版本
             return JSONObject.parseObject(StrUtil.format("{\"jsonrpc\":\"2.0\",\"id\":\"{}\",\"result\":{\"protocolVersion\":\"{}\",\"capabilities\":{\"logging\":{},\"resources\":{\"subscribe\":true,\"listChanged\":true},\"prompts\":{\"listChanged\":true},\"tools\":{\"listChanged\":true}},\"serverInfo\":{\"name\":\"ExampleServer\",\"version\":\"1.0.0\"}}}", body.getId(), ver));
         }
         if (body.getMethod().equalsIgnoreCase("tools/list")) {
