@@ -53,6 +53,8 @@ public class McpControllerMultiDeploy {
             return null;
         }
 
+        // validate authHeader if you like...
+
         if (isGet) {
             return new SseEmitter(TimeUnit.DAYS.toMillis(60)); // 2025-03-26
         }
