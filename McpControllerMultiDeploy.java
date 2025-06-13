@@ -49,7 +49,7 @@ public class McpControllerMultiDeploy {
         }
 
         if (StringUtils.isBlank(authHeader)) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized: auth header missing"); // 无Authorization头，返回401, 2025-03-26
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized: auth header missing"); // 无Authorization头，返回401, 2025-03-26，客户端看到401后调OAuthController获取sso地址然后发起sso流程，cursor客户端看到401则是切换成老版本
             return null;
         }
 
