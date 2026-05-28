@@ -45,8 +45,10 @@ public class McpControllerMultiDeploy {
         // 兼容2024-11-05，老客户端建立sse连接，老客户端是没有mcp-session-id头的。2025-03-26的Get连接是在initialize之后发起的肯定有mcp-session-id，如果Get没有mcp-session-id则是老协议
         boolean isGet = "GET".equalsIgnoreCase(request.getMethod());
         if (isGet && StringUtils.isBlank(sid)) {
-            return connect();
+            return connect(); // 2024-11-05 的服务端推送sse连接
         }
+
+        // ---以下为 2025-03-26 才进入---
 
         if (StringUtils.isBlank(authHeader)) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized: auth header missing"); // 无Authorization头，返回401, 2025-03-26，客户端看到401后调OAuthController获取sso地址然后发起sso流程，cursor客户端看到401则是切换成老版本
@@ -54,11 +56,13 @@ public class McpControllerMultiDeploy {
         }
 
         // validate authHeader if you like...
+        // ...
 
         if (isGet) {
-            return new SseEmitter(TimeUnit.DAYS.toMillis(60)); // 2025-03-26
+            return new SseEmitter(TimeUnit.DAYS.toMillis(60)); // 2025-03-26 的服务端推送sse连接
         }
 
+        // 2025-03-26 streamable http 直接在请求连接里推送服务端返回
         JSONRpcReqMessage body = JSONObject.parseObject(bodyStr, JSONRpcReqMessage.class);
         if (StringUtils.isBlank(body.getId()) || StringUtils.isBlank(body.getMethod())) {
             // jsonrpc notification/response
@@ -88,13 +92,16 @@ public class McpControllerMultiDeploy {
         final SseEmitter sse = new SseEmitter(TimeUnit.DAYS.toMillis(60));
         String uuid = UUID.randomUUID().toString().replaceAll("-","");
         SESSIONS.put(uuid, sse);
+        // 后续 mcp client 请求message端口带上session id 方便后端定位服务端sse推送链接；ip用来转发到后端连接所在机器
         sse.send(SseEmitter.event().name("endpoint").data(StrUtil.format("/mcp/message?sessionId={}&ip={}",uuid, IpUtil.getIp())));
         return sse;
     }
 
+    // 2024-11-05, 客户端请求, 后端异步在先前的sse链接推送响应
     @RequestMapping(value = "message", method = RequestMethod.POST)
     public JSONObject message(@RequestBody String bodyStr, @RequestParam("sessionId") String sessionId,@RequestParam("ip") String ip) throws IOException {
         JSONRpcReq body = JSONObject.parseObject(bodyStr, JSONRpcReq.class);
+        // 服务端响应sse连接 不在本机，则转发到sse连接所在机器进行响应
         if (!Objects.equals(IpUtil.getIp(), ip)) {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
