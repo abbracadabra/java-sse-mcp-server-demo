@@ -62,7 +62,7 @@ public class McpControllerMultiDeploy {
             return new SseEmitter(TimeUnit.DAYS.toMillis(60)); // 2025-03-26 的服务端推送sse连接
         }
 
-        // 2025-03-26 streamable http 直接在请求连接里推送服务端返回
+        // 2025-03-26 server直接在请求的连接里返回结果无需在另一条连接返回结果，可直接返回或者返回sse形式，我选择直接返回
         JSONRpcReqMessage body = JSONObject.parseObject(bodyStr, JSONRpcReqMessage.class);
         if (StringUtils.isBlank(body.getId()) || StringUtils.isBlank(body.getMethod())) {
             // jsonrpc notification/response
